@@ -2,6 +2,9 @@
 <html lang="th"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f3a4a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <title>บันทึกงานรถ</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap">
@@ -208,12 +211,15 @@ function fail(r, retry) {
     <div class="pair"><button class="yes" type="button" id="re">${r.net ? 'ส่งอีกครั้ง' : 'แก้ไข'}</button><button class="no" type="button" id="cx">ยกเลิก</button></div>`,
     () => { $('re').onclick = retry; $('cx').onclick = hide; });
 }
-// ส่งแล้วแสดงผล ถ้าไม่สำเร็จให้ลองใหม่ด้วยข้อมูลเดิม
+// ส่งแล้วแสดงผล ถ้าไม่สำเร็จให้ลองใหม่ด้วยข้อมูลเดิม (รหัสคำขอเดิม ระบบจะไม่บันทึกซ้ำ)
 async function send(app, data, okText, onEdit) {
+  if (!data.rid) data.rid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const r = await api(app, data, 'กำลังบันทึก…');
   if (r.ok) return finish(okText, r.msg);
   fail(r, r.net ? () => send(app, data, okText, onEdit) : (onEdit || hide));
 }
+// ปิดหน้าจอทันทีที่กดส่ง กันกดซ้ำระหว่างรอตำแหน่ง
+async function withGps(fn) { $('loadTxt').textContent = 'กำลังบันทึก…'; $('load').hidden = false; const g = await getPos(); return fn(g); }
 const base = () => ({ driver: S.name, unit: S.unit });
 
 /* ---------- ขั้นถ่ายรูป ---------- */
@@ -251,6 +257,7 @@ function numStep(n, i, q, sub, opt, next) {
         if (x < last) { $('nm').innerHTML = `<div class="msg bad">น้อยกว่าไมล์ล่าสุด ${fmt(last)} ลองดูหน้าปัดอีกครั้ง</div>`; return; }
         if (x - last > 1500 && !warned) { warned = true; $('nm').innerHTML = `<div class="msg warn">มากกว่าไมล์ล่าสุด ${fmt(x - last)} กม. ถ้าถูกแล้วกดอีกครั้ง</div>`; return; }
       }
+      $('nx').disabled = true;
       next(x);
     };
   });
@@ -260,20 +267,20 @@ const lastTxt = () => S.state && S.state.last != null ? `ล่าสุด ${fm
 /* ---------- งานแต่ละแบบ ---------- */
 function startFlow() {
   photoStep(2, 0, 'ถ่ายรูปหน้าปัด', 'ให้เห็นเลขไมล์ชัด ๆ', photo =>
-    numStep(2, 1, 'เลขไมล์เท่าไหร่', lastTxt(), { odo: 1, last: 1 }, async odo =>
-      send('start', { ...base(), odo, photo, gps: await getPos() }, 'ออกรถแล้ว', startFlow)));
+    numStep(2, 1, 'เลขไมล์เท่าไหร่', lastTxt(), { odo: 1, last: 1 }, odo =>
+      withGps(gps => send('start', { ...base(), odo, photo, gps }, 'ออกรถแล้ว', startFlow))));
 }
 function endFlow() {
   photoStep(2, 0, 'ถ่ายรูปหน้าปัดตอนจอด', 'จอดที่บ้านหรือที่จอดแล้วค่อยถ่าย', photo =>
-    numStep(2, 1, 'เลขไมล์ตอนจอด', lastTxt(), { odo: 1, last: 1 }, async odo =>
-      send('end', { ...base(), odo, photo, gps: await getPos() }, 'จบงานแล้ว', endFlow)));
+    numStep(2, 1, 'เลขไมล์ตอนจอด', lastTxt(), { odo: 1, last: 1 }, odo =>
+      withGps(gps => send('end', { ...base(), odo, photo, gps }, 'จบงานแล้ว', endFlow))));
 }
 function fuelFlow() {
   photoStep(4, 0, 'ถ่ายรูปใบเสร็จ', 'ให้เห็นยอดเงินและลิตร', photo =>
     numStep(4, 1, 'เลขไมล์ตอนเติม', lastTxt(), { odo: 1 }, odo =>
       numStep(4, 2, 'ยอดเงินกี่บาท', 'ตามใบเสร็จ', { dec: 1 }, amount =>
-        numStep(4, 3, 'กี่ลิตร', 'ตามใบเสร็จ', { dec: 1, last: 1 }, async liters =>
-          send('fuel', { ...base(), odo, amount, liters, photo, gps: await getPos() }, 'บันทึกเติมน้ำมันแล้ว', fuelFlow)))));
+        numStep(4, 3, 'กี่ลิตร', 'ตามใบเสร็จ', { dec: 1, last: 1 }, liters =>
+          withGps(gps => send('fuel', { ...base(), odo, amount, liters, photo, gps }, 'บันทึกเติมน้ำมันแล้ว', fuelFlow))))));
 }
 async function arriveFlow() {
   const gps = await getPos();
@@ -303,7 +310,7 @@ function pickShop(near, recent, save) {
 async function airOnFlow() {
   show(`${hdr(1, 0)}<p class="q">เริ่มปั่นแอร์</p><p class="sub">เปิดแอร์ให้ของในตู้ พอปิดแอร์แล้วกดปุ่มเดิมอีกครั้ง</p>
     <div class="pair"><button class="yes" type="button" id="y">เริ่มปั่น</button><button class="no" type="button" id="n">ยกเลิก</button></div>`,
-    () => { wireBack(); $('n').onclick = hide; $('y').onclick = async () => send('airOn', { ...base(), gps: await getPos() }, 'เริ่มปั่นแอร์แล้ว'); });
+    () => { wireBack(); $('n').onclick = hide; $('y').onclick = () => withGps(gps => send('airOn', { ...base(), gps }, 'เริ่มปั่นแอร์แล้ว')); });
 }
 function airOffFlow() {
   const t = new Date(S.state.air).toTimeString().slice(0, 5);
