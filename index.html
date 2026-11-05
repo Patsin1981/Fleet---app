@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a4a">
+<title>บันทึกงานรถ</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+/* Layout: คอลัมน์เดียว ปุ่มหลักใหญ่ปุ่มเดียวตามขั้นตอน ปุ่มรองแถวล่าง รายการวันนี้ด้านล่าง ทุกงานเปิดเป็นหน้าเต็มทีละขั้น */
+:root{
+  --bg:#f1f3f4; --surface:#ffffff; --ink:#16212a; --muted:#5f6c75; --line:#d7dde1;
+  --main:#f2b705; --main-ink:#1d1804; --road:#1f3a4a; --road-ink:#ffffff;
+  --ok:#1f7a4d; --ok-bg:#e2f2e9; --bad:#b3261e; --bad-bg:#fbe4e2; --warn:#8a5300; --warn-bg:#fdf0d6;
+  --font-body:"IBM Plex Sans Thai","Noto Sans Thai",Tahoma,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161a; --surface:#1a242b; --ink:#e8edf0; --muted:#9eabb3; --line:#2c3a43;
+  --main:#f2b705; --main-ink:#1d1804; --road:#a9c7d6; --road-ink:#10161a;
+  --ok:#72d19f; --ok-bg:#16332a; --bad:#ff8a80; --bad-bg:#3d1b18; --warn:#f0b35a; --warn-bg:#3a2a10; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161a; --surface:#1a242b; --ink:#e8edf0; --muted:#9eabb3; --line:#2c3a43;
+  --main:#f2b705; --main-ink:#1d1804; --road:#a9c7d6; --road-ink:#10161a;
+  --ok:#72d19f; --ok-bg:#16332a; --bad:#ff8a80; --bad-bg:#3d1b18; --warn:#f0b35a; --warn-bg:#3a2a10; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--road);outline-offset:2px}
+.app{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.demo{font-size:12px;color:var(--muted)}
+.me{display:flex;justify-content:space-between;align-items:center;background:none;border:0;padding:0;text-align:left;width:100%}
+.me b{font-size:18px}
+.me span{font-size:14px;color:var(--muted)}
+.me u{font-size:14px;color:var(--road);text-decoration:none;font-weight:600}
+.status{font-size:15px;color:var(--muted)}
+.status strong{color:var(--ink);font-size:24px;display:block;line-height:1.25}
+.big{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-height:170px;border:0;border-radius:20px;
+  background:var(--main);color:var(--main-ink);box-shadow:0 4px 0 rgba(0,0,0,.18)}
+.big strong{font-size:32px;line-height:1.1}
+.big small{font-size:15px;opacity:.8}
+.big:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.big[disabled]{background:var(--surface);color:var(--muted);box-shadow:none;border:2px solid var(--line)}
+.minor{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.minor button{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 6px;font-weight:600;font-size:16px}
+.minor button[disabled]{opacity:.35;cursor:not-allowed}
+.minor button.on{background:var(--road);color:var(--road-ink);border-color:var(--road)}
+.minor button small{display:block;font-size:12px;font-weight:500;opacity:.85}
+h2{font-size:15px;color:var(--muted);margin:0 0 6px;font-weight:600}
+.done{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:14px;border:1px solid var(--line)}
+.done li{display:flex;gap:12px;padding:10px 14px;border-top:1px solid var(--line);align-items:baseline}
+.done li:first-child{border-top:0}
+.done time{font-family:var(--font-num);font-size:14px;color:var(--muted);flex:none;width:44px}
+.done span{min-width:0;overflow-wrap:anywhere}
+.done em{font-style:normal;color:var(--muted);font-size:14px}
+/* หน้าเต็มทีละขั้น */
+.step{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;
+  padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.step .in{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-height:100%}
+.top{display:flex;justify-content:space-between;align-items:center}
+.top button{background:none;border:0;color:var(--road);font-weight:600;padding:4px 0}
+.dots{display:flex;gap:6px}.dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}.dots i.on{background:var(--road)}
+.q{font-size:26px;font-weight:700;line-height:1.25;margin:4px 0 0}
+.sub{color:var(--muted);font-size:15px;margin:0}
+.cam{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:230px;border:2px dashed var(--line);border-radius:18px;
+  background:var(--surface);cursor:pointer;overflow:hidden;position:relative}
+.cam input{position:absolute;opacity:0;width:1px;height:1px}
+.cam img{width:100%;height:230px;object-fit:cover}
+.cam .lens{width:64px;height:64px;border-radius:50%;border:6px solid var(--road)}
+.cam b{font-size:20px}
+.num{font-family:var(--font-num);font-size:42px;text-align:center;background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:10px;min-height:76px;letter-spacing:2px}
+.num.empty{color:var(--muted)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{background:var(--surface);border:1px solid var(--line);border-radius:12px;font-size:26px;font-family:var(--font-num);padding:12px 0}
+.msg{border-radius:10px;padding:10px 12px;font-size:15px}
+.msg.bad{background:var(--bad-bg);color:var(--bad)}.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.go{width:100%;border:0;border-radius:16px;padding:18px;font-size:22px;font-weight:700;background:var(--road);color:var(--road-ink);margin-top:auto}
+.go[disabled]{opacity:.35;cursor:not-allowed}
+.shop{background:var(--surface);border:2px solid var(--road);border-radius:18px;padding:20px;text-align:center}
+.shop b{font-size:28px;display:block}
+.shop span{color:var(--muted);font-size:15px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pair button{border-radius:16px;padding:18px;font-size:20px;font-weight:700;border:0}
+.yes{background:var(--road);color:var(--road-ink)}.no{background:var(--surface);border:1px solid var(--line)!important}
+.list{display:flex;flex-direction:column;gap:8px}
+.list button{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:18px}
+.list button small{display:block;color:var(--muted);font-size:13px}
+input[type=text]{font:inherit;font-size:20px;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);width:100%}
+.check{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;margin:auto 0}
+.check .ring{width:96px;height:96px;border-radius:50%;background:var(--ok-bg);display:grid;place-items:center}
+.check .ring::after{content:"";width:34px;height:18px;border-left:7px solid var(--ok);border-bottom:7px solid var(--ok);transform:rotate(-45deg) translate(3px,-4px)}
+.check b{font-size:26px}
+@media (prefers-reduced-motion:no-preference){.step{animation:fade .15s ease-out}@keyframes fade{from{opacity:.4;transform:translateY(10px)}}}
+
+.load{position:fixed;inset:0;background:rgba(10,16,20,.55);display:grid;place-items:center;z-index:40;color:#fff;font-size:20px;font-weight:600}
+.load span{background:var(--road);color:var(--road-ink);padding:16px 22px;border-radius:14px}
+.note{font-size:14px;border-radius:10px;padding:8px 12px;background:var(--warn-bg);color:var(--warn)}
+.err .ring{background:var(--bad-bg)}.err .ring::after{content:"!";border:0;transform:none;width:auto;height:auto;font-size:52px;font-weight:700;color:var(--bad)}
+</style>
+</head><body>
+<div class="app">
+  <div class="note" id="gpsNote" hidden>เปิดตำแหน่ง (GPS) ไม่ได้ ระบบจะบันทึกโดยไม่มีพิกัด กรุณาอนุญาตตำแหน่งให้เบราว์เซอร์</div>
+  <button class="me" id="me" type="button"><span><b id="meName">-</b><br><span id="mePlate"></span></span><u>เปลี่ยน</u></button>
+  <div class="status" id="status"><strong>กำลังโหลด…</strong></div>
+  <button class="big" id="bigBtn" type="button" disabled><strong>รอสักครู่</strong></button>
+  <div class="minor">
+    <button type="button" id="bFuel" disabled>เติมน้ำมัน</button>
+    <button type="button" id="bAir" disabled>ปั่นแอร์</button>
+    <button type="button" id="bEnd" disabled>จบงาน</button>
+  </div>
+  <section><h2>วันนี้ทำแล้ว</h2><ul class="done" id="done"></ul></section>
+</div>
+<div class="step" id="step" hidden><div class="in" id="stepIn"></div></div>
+<div class="load" id="load" hidden><span id="loadTxt">กำลังส่ง…</span></div>
+<script>
+// แอปบันทึกงานรถ — คุยกับ Apps Script (LINE Mileage Bot) ผ่าน doPost
+const API_URL = 'https://script.google.com/macros/s/AKfycbxrLjfgFHtpdZeoqSkjrldOOgOWWgOSdXvBKv7dOB5huex4iN4W_2SXVtOMVueJ5Oe_/exec';
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString('en-US');
+const S = { name: '', unit: '', plate: '', vehicles: [], drivers: [], state: null };
+const store = {
+  get(k) { try { return localStorage.getItem('fleet_' + k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { localStorage.setItem('fleet_' + k, v); } catch (e) {} },
+};
+
+/* ---------- เรียกเซิร์ฟเวอร์ ---------- */
+async function api(app, data, loadingText) {
+  if (loadingText) { $('loadTxt').textContent = loadingText; $('load').hidden = false; }
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+    const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ app, ...data }), signal: ctl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    if (j.state) S.state = j.state;
+    return j;
+  } catch (e) {
+    return { ok: false, msg: 'ส่งไม่สำเร็จ ตรวจสัญญาณเน็ตแล้วลองใหม่', net: true };
+  } finally { $('load').hidden = true; }
+}
+
+/* ---------- ตำแหน่ง ---------- */
+function getPos() {
+  return new Promise(res => {
+    if (!navigator.geolocation) { $('gpsNote').hidden = false; return res(null); }
+    navigator.geolocation.getCurrentPosition(
+      p => { $('gpsNote').hidden = true; res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
+      () => { $('gpsNote').hidden = false; res(null); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  });
+}
+
+/* ---------- รูป: ย่อก่อนส่ง ---------- */
+function shrink(file) {
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1280, k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => res(e.target.result);
+      img.src = e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+/* ---------- หน้าหลัก ---------- */
+const dur = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? `${m} นาที` : `${Math.floor(m / 60)} ชม. ${m % 60} นาที`; };
+function home() {
+  $('meName').textContent = S.name || 'ยังไม่เลือกชื่อ';
+  $('mePlate').textContent = S.plate ? 'รถ ' + S.plate : '';
+  const st = S.state, b = $('bigBtn');
+  if (!st) return;
+  b.disabled = false;
+  if (st.phase === 'start') { $('status').innerHTML = '<strong>ยังไม่ออกรถ</strong>เริ่มงานวันนี้'; b.innerHTML = '<strong>ออกรถ</strong><small>ถ่ายรูปหน้าปัด แล้วใส่เลขไมล์</small>'; b.onclick = () => airGuard(startFlow); }
+  else if (st.phase === 'run') { $('status').innerHTML = `<strong>กำลังวิ่งงาน</strong>ส่งแล้ว ${st.stops} จุด`; b.innerHTML = '<strong>ถึงร้านแล้ว</strong><small>กดเมื่อจอดที่ร้าน</small>'; b.onclick = () => airGuard(arriveFlow); }
+  else { $('status').innerHTML = '<strong>จบงานแล้ว</strong>พรุ่งนี้กด "ออกรถ" ได้เลย'; b.innerHTML = '<strong>จบงานแล้ว</strong>'; b.disabled = true; b.onclick = null; }
+  $('bFuel').disabled = false; $('bEnd').disabled = st.phase !== 'run'; $('bAir').disabled = false;
+  $('bAir').classList.toggle('on', !!st.air);
+  $('bAir').innerHTML = st.air ? `ปิดแอร์<small>ปั่นมา ${dur(Date.now() - st.air)}</small>` : 'ปั่นแอร์';
+  $('done').innerHTML = st.log.length ? st.log.map(([t, a, d]) => `<li><time>${t}</time><span>${esc(a)}${d ? ` <em>${esc(d)}</em>` : ''}</span></li>`).join('') : '<li><span><em>ยังไม่มี</em></span></li>';
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function show(html, wire) { $('stepIn').innerHTML = html; $('step').hidden = false; $('step').scrollTop = 0; wire && wire(); }
+function hide() { $('step').hidden = true; home(); }
+const hdr = (n, i, noBack) => `<div class="top">${noBack ? '<span></span>' : '<button type="button" id="back">ยกเลิก</button>'}${n > 1 ? `<div class="dots">${Array.from({ length: n }, (_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>` : ''}</div>`;
+const wireBack = () => { const b = $('back'); if (b) b.onclick = hide; };
+function finish(text, sub) { show(`<div class="check"><div class="ring"></div><b>${esc(text)}</b><p class="sub">${esc(sub || '')}</p></div><button class="go" type="button" id="ok">กลับหน้าหลัก</button>`, () => $('ok').onclick = hide); }
+function fail(r, retry) {
+  show(`<div class="check err"><div class="ring"></div><b>ยังไม่ได้บันทึก</b><p class="sub">${esc(r.msg || 'ลองใหม่อีกครั้ง')}</p></div>
+    <div class="pair"><button class="yes" type="button" id="re">${r.net ? 'ส่งอีกครั้ง' : 'แก้ไข'}</button><button class="no" type="button" id="cx">ยกเลิก</button></div>`,
+    () => { $('re').onclick = retry; $('cx').onclick = hide; });
+}
+// ส่งแล้วแสดงผล ถ้าไม่สำเร็จให้ลองใหม่ด้วยข้อมูลเดิม
+async function send(app, data, okText, onEdit) {
+  const r = await api(app, data, 'กำลังบันทึก…');
+  if (r.ok) return finish(okText, r.msg);
+  fail(r, r.net ? () => send(app, data, okText, onEdit) : (onEdit || hide));
+}
+const base = () => ({ driver: S.name, unit: S.unit });
+
+/* ---------- ขั้นถ่ายรูป ---------- */
+function photoStep(n, i, q, sub, next) {
+  show(`${hdr(n, i)}<p class="q">${q}</p><p class="sub">${sub}</p>
+    <label class="cam" for="cam" id="camBox"><span class="lens"></span><b>แตะเพื่อถ่ายรูป</b><input type="file" id="cam" accept="image/*" capture="environment"></label>
+    <button class="go" type="button" id="nx" disabled>ถัดไป</button>`, () => {
+    wireBack(); let data = '';
+    $('cam').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      data = await shrink(f);
+      $('camBox').innerHTML = `<img alt="รูปที่ถ่าย" src="${data}">`; $('nx').disabled = false;
+    };
+    $('nx').onclick = () => next(data);
+  });
+}
+
+/* ---------- ขั้นใส่ตัวเลข ---------- */
+function numStep(n, i, q, sub, opt, next) {
+  let v = '', warned = false;
+  show(`${hdr(n, i)}<p class="q">${q}</p><p class="sub">${sub}</p>
+    <div class="num empty" id="nv">0</div><div id="nm"></div>
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, opt.dec ? '.' : '', 0, 'ลบ'].map(k => `<button type="button" data-k="${k}" ${k === '' ? 'disabled style="visibility:hidden"' : ''}>${k}</button>`).join('')}</div>
+    <button class="go" type="button" id="nx" disabled>${opt.last ? 'ส่ง' : 'ถัดไป'}</button>`, () => {
+    wireBack();
+    const paint = () => { $('nv').textContent = v ? (opt.dec ? v : fmt(v)) : '0'; $('nv').classList.toggle('empty', !v); $('nx').disabled = !v; $('nm').innerHTML = ''; warned = false; };
+    document.querySelectorAll('.pad button').forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      if (k === 'ลบ') v = v.slice(0, -1); else if (!(k === '.' && v.includes('.')) && v.length < 9) v += k;
+      paint();
+    });
+    $('nx').onclick = () => {
+      const x = Number(v), last = S.state && S.state.last;
+      if (opt.odo && last != null) {
+        if (x < last) { $('nm').innerHTML = `<div class="msg bad">น้อยกว่าไมล์ล่าสุด ${fmt(last)} ลองดูหน้าปัดอีกครั้ง</div>`; return; }
+        if (x - last > 1500 && !warned) { warned = true; $('nm').innerHTML = `<div class="msg warn">มากกว่าไมล์ล่าสุด ${fmt(x - last)} กม. ถ้าถูกแล้วกดอีกครั้ง</div>`; return; }
+      }
+      next(x);
+    };
+  });
+}
+const lastTxt = () => S.state && S.state.last != null ? `ล่าสุด ${fmt(S.state.last)}` : 'ใส่ตามหน้าปัด';
+
+/* ---------- งานแต่ละแบบ ---------- */
+function startFlow() {
+  photoStep(2, 0, 'ถ่ายรูปหน้าปัด', 'ให้เห็นเลขไมล์ชัด ๆ', photo =>
+    numStep(2, 1, 'เลขไมล์เท่าไหร่', lastTxt(), { odo: 1, last: 1 }, async odo =>
+      send('start', { ...base(), odo, photo, gps: await getPos() }, 'ออกรถแล้ว', startFlow)));
+}
+function endFlow() {
+  photoStep(2, 0, 'ถ่ายรูปหน้าปัดตอนจอด', 'จอดที่บ้านหรือที่จอดแล้วค่อยถ่าย', photo =>
+    numStep(2, 1, 'เลขไมล์ตอนจอด', lastTxt(), { odo: 1, last: 1 }, async odo =>
+      send('end', { ...base(), odo, photo, gps: await getPos() }, 'จบงานแล้ว', endFlow)));
+}
+function fuelFlow() {
+  photoStep(4, 0, 'ถ่ายรูปใบเสร็จ', 'ให้เห็นยอดเงินและลิตร', photo =>
+    numStep(4, 1, 'เลขไมล์ตอนเติม', lastTxt(), { odo: 1 }, odo =>
+      numStep(4, 2, 'ยอดเงินกี่บาท', 'ตามใบเสร็จ', { dec: 1 }, amount =>
+        numStep(4, 3, 'กี่ลิตร', 'ตามใบเสร็จ', { dec: 1, last: 1 }, async liters =>
+          send('fuel', { ...base(), odo, amount, liters, photo, gps: await getPos() }, 'บันทึกเติมน้ำมันแล้ว', fuelFlow)))));
+}
+async function arriveFlow() {
+  $('loadTxt').textContent = 'กำลังหาตำแหน่ง…'; $('load').hidden = false;
+  const gps = await getPos();
+  const r = await api('near', { ...base(), gps }, 'กำลังหาร้านใกล้ ๆ…');
+  const near = (r.near || []), recent = (r.recent || []);
+  const save = name => send('arrive', { ...base(), name, gps }, 'บันทึกแล้ว');
+  if (near[0] && near[0].dist <= 300) {
+    show(`${hdr(1, 0)}<p class="q">อยู่ที่ร้านนี้ใช่ไหม</p>
+      <div class="shop"><b>${esc(near[0].name)}</b><span>ห่างจากคุณ ${fmt(near[0].dist)} ม.</span></div>
+      <div class="pair"><button class="yes" type="button" id="y">ใช่</button><button class="no" type="button" id="n">ไม่ใช่</button></div>`,
+      () => { wireBack(); $('y').onclick = () => save(near[0].name); $('n').onclick = () => pickShop(near, recent, save); });
+  } else pickShop(near, recent, save);
+}
+function pickShop(near, recent, save) {
+  const items = [...near.map(x => [x.name, x.dist >= 1000 ? (x.dist / 1000).toFixed(1) + ' กม.' : x.dist + ' ม.']), ...recent.map(x => [x.name, 'เคยไป'])];
+  show(`${hdr(1, 0)}<p class="q">เลือกร้าน</p>
+    ${items.length ? `<div class="list">${items.map(([n, d]) => `<button type="button" data-n="${esc(n)}">${esc(n)}<small>${d}</small></button>`).join('')}</div>` : ''}
+    <p class="sub">${items.length ? 'ไม่มีในรายการ ' : ''}พิมพ์ชื่อร้าน</p><input type="text" id="nw" placeholder="ชื่อร้าน" autocomplete="off">
+    <button class="go" type="button" id="nx" disabled>บันทึก</button>`, () => {
+    wireBack();
+    document.querySelectorAll('.list button').forEach(b => b.onclick = () => save(b.dataset.n));
+    $('nw').oninput = () => $('nx').disabled = !$('nw').value.trim();
+    $('nx').onclick = () => save($('nw').value.trim());
+  });
+}
+async function airOnFlow() {
+  show(`${hdr(1, 0)}<p class="q">เริ่มปั่นแอร์</p><p class="sub">เปิดแอร์ให้ของในตู้ พอปิดแอร์แล้วกดปุ่มเดิมอีกครั้ง</p>
+    <div class="pair"><button class="yes" type="button" id="y">เริ่มปั่น</button><button class="no" type="button" id="n">ยกเลิก</button></div>`,
+    () => { wireBack(); $('n').onclick = hide; $('y').onclick = async () => send('airOn', { ...base(), gps: await getPos() }, 'เริ่มปั่นแอร์แล้ว'); });
+}
+function airOffFlow() {
+  const t = new Date(S.state.air).toTimeString().slice(0, 5);
+  show(`${hdr(1, 0)}<p class="q">ปิดแอร์ตอนนี้</p><p class="sub">ปั่นมา ${dur(Date.now() - S.state.air)} ตั้งแต่ ${t}</p>
+    <div class="pair"><button class="yes" type="button" id="y">ปิดแอร์</button><button class="no" type="button" id="n">ยังไม่ปิด</button></div>`,
+    () => { wireBack(); $('n').onclick = hide; $('y').onclick = () => send('airOff', base(), 'บันทึกปิดแอร์แล้ว'); });
+}
+// ยังปั่นแอร์อยู่: ถามก่อนออกรถ / ถึงร้าน กันลืมกดปิด
+function airGuard(fn) {
+  if (!S.state || !S.state.air) return fn();
+  show(`${hdr(1, 0)}<p class="q">ยังปั่นแอร์อยู่ ปิดแอร์แล้วหรือยัง</p><p class="sub">ปั่นมา ${dur(Date.now() - S.state.air)}</p>
+    <div class="pair"><button class="yes" type="button" id="y">ปิดแล้ว</button><button class="no" type="button" id="n">ยังปั่นอยู่</button></div>`, () => {
+    wireBack(); $('n').onclick = fn;
+    $('y').onclick = async () => { const r = await api('airOff', base(), 'กำลังบันทึก…'); r.ok ? fn() : fail(r, hide); };
+  });
+}
+
+/* ---------- เลือกชื่อ / รถ ---------- */
+function setup(force) {
+  show(`${hdr(2, 0, !force)}<p class="q">คุณชื่ออะไร</p><div class="list">${S.drivers.map(d => `<button type="button" data-v="${esc(d)}">${esc(d)}</button>`).join('')}</div>`, () => {
+    wireBack();
+    document.querySelectorAll('.list button').forEach(b => b.onclick = () => {
+      S.name = b.dataset.v; store.set('name', S.name);
+      show(`${hdr(2, 1, !force)}<p class="q">วันนี้ขับคันไหน</p><div class="list">${S.vehicles.map(v => `<button type="button" data-v="${v.unit}">${esc(v.plate)}${v.type ? `<small>${esc(v.type)}</small>` : ''}</button>`).join('')}</div>`, () => {
+        wireBack();
+        document.querySelectorAll('.list button').forEach(c => c.onclick = async () => {
+          S.unit = c.dataset.v; S.plate = S.vehicles.find(v => v.unit === S.unit).plate; store.set('unit', S.unit);
+          const r = await api('state', { unit: S.unit }, 'กำลังโหลด…');
+          if (!r.ok) return fail(r, () => setup(true));
+          hide();
+        });
+      });
+    });
+  });
+}
+
+async function boot() {
+  const r = await api('init', {}, 'กำลังโหลด…');
+  if (!r.ok) { $('status').innerHTML = `<strong>เชื่อมต่อไม่ได้</strong>${esc(r.msg)}`; $('bigBtn').disabled = false; $('bigBtn').innerHTML = '<strong>ลองใหม่</strong>'; $('bigBtn').onclick = boot; return; }
+  S.drivers = r.drivers; S.vehicles = r.vehicles;
+  S.name = store.get('name'); S.unit = store.get('unit');
+  const v = S.vehicles.find(x => x.unit === S.unit);
+  if (!S.name || !v) return setup(true);
+  S.plate = v.plate;
+  const s = await api('state', { unit: S.unit }, 'กำลังโหลด…');
+  if (!s.ok) return fail(s, boot);
+  home();
+}
+
+$('bFuel').onclick = fuelFlow;
+$('bEnd').onclick = endFlow;
+$('bAir').onclick = () => (S.state && S.state.air ? airOffFlow() : airOnFlow());
+$('me').onclick = () => S.drivers.length && setup(false);
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && S.unit && $('step').hidden) { await api('state', { unit: S.unit }); home(); } });
+setInterval(() => { if ($('step').hidden) home(); }, 30000);
+getPos();   // ขออนุญาตตำแหน่งตั้งแต่เปิดแอป
+boot();
+
+</script>
+</body></html>
