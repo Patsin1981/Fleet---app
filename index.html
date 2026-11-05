@@ -2,10 +2,7 @@
 <html lang="th"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f3a4a">
-<title>Fleet App</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<title>บันทึกงานรถ</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap">
 <style>
@@ -143,16 +140,27 @@ async function api(app, data, loadingText) {
   } finally { $('load').hidden = true; }
 }
 
-/* ---------- ตำแหน่ง ---------- */
-function getPos() {
-  return new Promise(res => {
-    if (!navigator.geolocation) { $('gpsNote').hidden = false; return res(null); }
-    navigator.geolocation.getCurrentPosition(
-      p => { $('gpsNote').hidden = true; res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
-      () => { $('gpsNote').hidden = false; res(null); },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
-  });
+/* ---------- ตำแหน่ง: ติดตามตลอดตั้งแต่เปิดแอป กดปุ่มแล้วใช้ตำแหน่งล่าสุดได้ทันที ---------- */
+S.pos = null;
+function watchGps() {
+  if (!navigator.geolocation) { $('gpsNote').hidden = false; return; }
+  navigator.geolocation.watchPosition(
+    p => { S.pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() }; $('gpsNote').hidden = true; },
+    e => { if (e.code === 1) $('gpsNote').hidden = false; },
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 60000 });
 }
+const posOut = () => ({ lat: S.pos.lat, lng: S.pos.lng, acc: S.pos.acc });
+async function getPos() {
+  const fresh = () => S.pos && Date.now() - S.pos.t < 180000;
+  if (fresh()) return posOut();
+  for (let i = 0; i < 12 && !fresh(); i++) await new Promise(r => setTimeout(r, 500));   // รอตำแหน่งแรกไม่เกิน 6 วินาที
+  if (fresh()) return posOut();
+  return new Promise(res => navigator.geolocation ? navigator.geolocation.getCurrentPosition(
+    p => res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), () => res(null),
+    { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }) : res(null));
+}
+const distM = (a, lat, lng) => { const R = 6371000, t = x => x * Math.PI / 180, dLa = t(lat - a.lat), dLo = t(lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(t(a.lat)) * Math.cos(t(lat)) * Math.sin(dLo / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); };
 
 /* ---------- รูป: ย่อก่อนส่ง ---------- */
 function shrink(file) {
@@ -268,10 +276,10 @@ function fuelFlow() {
           send('fuel', { ...base(), odo, amount, liters, photo, gps: await getPos() }, 'บันทึกเติมน้ำมันแล้ว', fuelFlow)))));
 }
 async function arriveFlow() {
-  $('loadTxt').textContent = 'กำลังหาตำแหน่ง…'; $('load').hidden = false;
   const gps = await getPos();
-  const r = await api('near', { ...base(), gps }, 'กำลังหาร้านใกล้ ๆ…');
-  const near = (r.near || []), recent = (r.recent || []);
+  const st = S.state || {};
+  const near = gps ? (st.shops || []).map(([name, lat, lng]) => ({ name, dist: distM(gps, lat, lng) })).filter(x => x.dist <= 30000).sort((a, b) => a.dist - b.dist).slice(0, 5) : [];
+  const recent = (st.recent || []).filter(n => !near.some(x => x.name === n)).map(name => ({ name }));
   const save = name => send('arrive', { ...base(), name, gps }, 'บันทึกแล้ว');
   if (near[0] && near[0].dist <= 300) {
     show(`${hdr(1, 0)}<p class="q">อยู่ที่ร้านนี้ใช่ไหม</p>
@@ -351,17 +359,8 @@ $('bAir').onclick = () => (S.state && S.state.air ? airOffFlow() : airOnFlow());
 $('me').onclick = () => S.drivers.length && setup(false);
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && S.unit && $('step').hidden) { await api('state', { unit: S.unit }); home(); } });
 setInterval(() => { if ($('step').hidden) home(); }, 30000);
-getPos();   // ขออนุญาตตำแหน่งตั้งแต่เปิดแอป
+watchGps();   // เริ่มติดตามตำแหน่งตั้งแต่เปิดแอป
 boot();
-
-// Service Worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').then(() => {
-    console.log('Service Worker registered');
-  }).catch((err) => {
-    console.log('Service Worker registration failed:', err);
-  });
-}
 
 </script>
 </body></html>
