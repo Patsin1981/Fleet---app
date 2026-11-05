@@ -2,7 +2,8 @@ const CACHE_NAME = 'fleet-app-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (e) => {
